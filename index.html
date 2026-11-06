@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#14532d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>मेरा खर्चा – Daily Expense Manager</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Noto Sans Devanagari",sans-serif;color:#17211b;background:#f3f7f3}
+*{box-sizing:border-box}body{margin:0}header{background:#14532d;color:white;padding:22px 16px 18px}
+header h1{margin:0;font-size:23px}header p{margin:5px 0 0;color:#d8f3df;font-size:13px}
+main{max-width:680px;margin:auto;padding:14px}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.card,.panel{background:white;border-radius:16px;padding:15px;box-shadow:0 2px 10px #16351b0d}
+.muted{color:#66736a;font-size:12px}.big{font-size:25px;font-weight:750;margin-top:5px;color:#14532d}
+h2{font-size:17px;margin:0 0 12px}.panel{margin-bottom:13px}
+label{display:block;font-size:13px;font-weight:650;margin:10px 0 5px}
+input,select,button{font:inherit;width:100%;padding:12px;border-radius:10px;border:1px solid #d6dfd7;background:white}
+button{border:0;background:#166534;color:white;font-weight:700;margin-top:12px;cursor:pointer}
+button.secondary{background:#e7f2e9;color:#14532d}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.entry{display:flex;justify-content:space-between;gap:8px;padding:11px 0;border-bottom:1px solid #edf1ed}
+.entry:last-child{border:0}.entry strong{display:block}.entry small{color:#66736a}
+.amount{font-weight:750;white-space:nowrap}.delete{width:auto;padding:5px 9px;margin:0 0 0 8px;background:#fee2e2;color:#991b1b}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.empty{padding:16px;text-align:center;color:#718076;background:#f7faf7;border-radius:10px}
+footer{text-align:center;color:#77847a;font-size:11px;padding:10px 0 25px}
+@media print{header,.formpanel,.actions,.delete,footer{display:none!important}body{background:white}.panel,.card{box-shadow:none;border:1px solid #ddd}}
+</style>
+</head>
+<body>
+<header><h1>💰 मेरा खर्चा</h1><p>रोज़ाना खर्च का आसान हिसाब</p></header>
+<main>
+<section class="cards">
+ <div class="card"><div class="muted">चुनी तारीख का खर्च</div><div class="big" id="dayTotal">₹0</div></div>
+ <div class="card"><div class="muted">इस महीने का खर्च</div><div class="big" id="monthTotal">₹0</div></div>
+</section>
+<section class="panel formpanel">
+<h2>नया खर्च जोड़ें</h2>
+<label for="date">तारीख</label><input id="date" type="date">
+<label for="category">खर्च की श्रेणी</label>
+<select id="category">
+<option>Petrol</option><option>सब्ज़ी</option><option>राशन</option><option>Lunch</option><option>Dinner</option><option>चाय / नाश्ता</option><option>दवाई</option><option>बिल</option><option>यात्रा</option><option>Shopping</option><option>अन्य</option>
+</select>
+<div class="row">
+ <div><label for="amount">रकम (₹)</label><input id="amount" type="number" min="1" step="0.01" placeholder="जैसे 200"></div>
+ <div><label for="note">विवरण (वैकल्पिक)</label><input id="note" type="text" placeholder="जैसे बाइक पेट्रोल"></div>
+</div>
+<button id="add">+ खर्च जोड़ें</button>
+</section>
+<section class="panel">
+<h2>खर्च देखें</h2>
+<label for="filterDate">किस तारीख का हिसाब?</label><input id="filterDate" type="date">
+<div id="entries" class="empty">अभी कोई खर्च दर्ज नहीं है।</div>
+</section>
+<section class="panel">
+<h2>रिपोर्ट</h2>
+<div class="row">
+<div><label for="reportMonth">महीना चुनें</label><input id="reportMonth" type="month"></div>
+<div style="align-self:end"><div class="muted">चुने महीने का कुल</div><div class="big" id="selectedMonthTotal">₹0</div></div>
+</div>
+<div class="actions">
+<button class="secondary" id="csv">Excel/CSV डाउनलोड</button>
+<button class="secondary" id="pdf">PDF / प्रिंट रिपोर्ट</button>
+</div>
+</section>
+<footer>आपका हिसाब इसी फोन के ब्राउज़र में सेव होता है। ब्राउज़र का डेटा साफ़ करने पर रिकॉर्ड मिट सकते हैं।</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const today=new Date(), iso=d=>{const x=new Date(d.getTime()-d.getTimezoneOffset()*60000);return x.toISOString().slice(0,10)};
+$('date').value=iso(today);$('filterDate').value=iso(today);$('reportMonth').value=iso(today).slice(0,7);
+let records=[];try{records=JSON.parse(localStorage.getItem('meraKharchaRecords')||'[]')}catch(e){}
+const money=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2});
+function save(){localStorage.setItem('meraKharchaRecords',JSON.stringify(records));render()}
+function render(){
+ const d=$('filterDate').value,m=$('reportMonth').value, todayMonth=iso(today).slice(0,7);
+ const sum=a=>a.reduce((s,x)=>s+Number(x.amount),0);
+ $('dayTotal').textContent=money(sum(records.filter(x=>x.date===d)));
+ $('monthTotal').textContent=money(sum(records.filter(x=>x.date.startsWith(todayMonth))));
+ $('selectedMonthTotal').textContent=money(sum(records.filter(x=>x.date.startsWith(m))));
+ const list=records.filter(x=>x.date===d).sort((a,b)=>b.id-a.id);
+ const box=$('entries');box.className=list.length?'':'empty';box.innerHTML='';
+ if(!list.length){box.textContent='इस तारीख का कोई खर्च दर्ज नहीं है।';return}
+ list.forEach(x=>{
+  const el=document.createElement('div');el.className='entry';
+  const left=document.createElement('div'),right=document.createElement('div');
+  const strong=document.createElement('strong');strong.textContent=x.category;
+  const small=document.createElement('small');small.textContent=x.note||x.date;
+  left.append(strong,small);
+  const amt=document.createElement('span');amt.className='amount';amt.textContent=money(x.amount);
+  const del=document.createElement('button');del.className='delete';del.textContent='हटाएँ';del.onclick=()=>{if(confirm('यह खर्च हटाएँ?')){records=records.filter(r=>r.id!==x.id);save()}};
+  right.append(amt,del);el.append(left,right);box.append(el);
+ });
+}
+$('add').onclick=()=>{
+ const amount=Number($('amount').value),date=$('date').value;
+ if(!date||!Number.isFinite(amount)||amount<=0){alert('कृपया तारीख और सही रकम भरें।');return}
+ records.push({id:Date.now(),date,category:$('category').value,amount,note:$('note').value.trim()});
+ $('amount').value='';$('note').value='';$('filterDate').value=date;save();
+};
+$('filterDate').onchange=render;$('reportMonth').onchange=render;
+$('csv').onclick=()=>{
+ const rows=[['तारीख','श्रेणी','रकम (रुपये)','विवरण'],...records.map(x=>[x.date,x.category,x.amount,x.note])];
+ const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='mera-kharcha.csv';a.click();URL.revokeObjectURL(a.href);
+};
+$('pdf').onclick=()=>window.print();
+render();
+</script>
+<script>if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(()=>{})); }</script>
+</body></html>
